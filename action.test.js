@@ -7,6 +7,7 @@ const got = require('got');
 const {
     exportSecrets,
     parseSecretsInput,
+    parseResponse
 } = require('./action');
 
 const { when } = require('jest-when');
@@ -82,6 +83,38 @@ describe('parseSecretsInput', () => {
     })
 });
 
+describe('parseResponse', () => {
+    // https://www.vaultproject.io/api/secret/kv/kv-v1.html#sample-response
+    it('parses K/V version 1 response', () => {
+        const response = JSON.stringify({
+            data: {
+                foo: 'bar'
+            }
+        })
+        const output = parseResponse(response, 1);
+
+        expect(output).toEqual({
+            foo: 'bar'
+        });
+    });
+
+    // https://www.vaultproject.io/api/secret/kv/kv-v2.html#read-secret-version
+    it('parses K/V version 2 response', () => {
+        const response = JSON.stringify({
+            data: {
+                data: {
+                    foo: 'bar'
+                }
+            }
+        })
+        const output = parseResponse(response, 2);
+
+        expect(output).toEqual({
+            foo: 'bar'
+        });
+    });
+});
+
 
 describe('exportSecrets', () => {
     beforeEach(() => {
@@ -102,14 +135,31 @@ describe('exportSecrets', () => {
             .mockReturnValue(key);
     }
 
-    function mockVaultData(data) {
-        got.mockResolvedValue({
-            body: JSON.stringify({
-                data: {
-                    data
-                }
-            })
-        });
+    function mockVersion(version) {
+        when(core.getInput)
+            .calledWith('kv-version')
+            .mockReturnValue(version);
+    }
+
+    function mockVaultData(data, version='2') {
+        switch(version) {
+            case '1':
+                got.mockResolvedValue({
+                    body: JSON.stringify({
+                        data
+                    })
+                });
+            break;
+            case '2':
+                got.mockResolvedValue({
+                    body: JSON.stringify({
+                        data: {
+                            data
+                        }
+                    })
+                });
+            break;
+        }
     }
 
     it('simple secret retrieval', async () => {
@@ -132,5 +182,19 @@ describe('exportSecrets', () => {
         await exportSecrets();
 
         expect(core.exportVariable).toBeCalledWith('TEST_NAME', '1');
+    });
+
+    it('simple secret retrieval from K/V v1', async () => {
+        const version = '1';
+
+        mockInput('test key');
+        mockVersion(version);
+        mockVaultData({
+            key: 1
+        }, version);
+
+        await exportSecrets();
+
+        expect(core.exportVariable).toBeCalledWith('KEY', '1');
     });
 });

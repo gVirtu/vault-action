@@ -23,12 +23,11 @@ describe('integration', () => {
             headers: {
                 'X-Vault-Token': 'testtoken',
             },
-            body: {
+            json: {
                 data: {
                     secret: 'SUPERSECRET',
                 },
-            },
-            json: true,
+            }
         });
 
         await got(`${vaultUrl}/v1/secret/data/nested/test`, {
@@ -36,12 +35,51 @@ describe('integration', () => {
             headers: {
                 'X-Vault-Token': 'testtoken',
             },
-            body: {
+            json: {
                 data: {
                     otherSecret: 'OTHERSUPERSECRET',
                 },
+            }
+        });
+
+        // Enable custom secret engine
+        try {
+            await got(`${vaultUrl}/v1/sys/mounts/my-secret`, {
+                method: 'POST',
+                headers: {
+                    'X-Vault-Token': 'testtoken',
+                },
+                json: {
+                    type: 'kv'
+                }
+            });
+        } catch (error) {
+            const {response} = error;
+            if (response.statusCode === 400 && response.body.includes("path is already in use")) {
+                // Engine might already be enabled from previous test runs
+            } else {
+                throw error;
+            }
+        }
+
+        await got(`${vaultUrl}/v1/my-secret/test`, {
+            method: 'POST',
+            headers: {
+                'X-Vault-Token': 'testtoken',
             },
-            json: true,
+            json: {
+                secret: 'CUSTOMSECRET',
+            }
+        });
+
+        await got(`${vaultUrl}/v1/my-secret/nested/test`, {
+            method: 'POST',
+            headers: {
+                'X-Vault-Token': 'testtoken',
+            },
+            json: {
+                otherSecret: 'OTHERCUSTOMSECRET',
+            }
         });
     });
 
@@ -61,6 +99,18 @@ describe('integration', () => {
         when(core.getInput)
             .calledWith('secrets')
             .mockReturnValue(secrets);
+    }
+
+    function mockEngineName(name) {
+        when(core.getInput)
+            .calledWith('engine-name')
+            .mockReturnValue(name);
+    }
+
+    function mockVersion(version) {
+        when(core.getInput)
+            .calledWith('kv-version')
+            .mockReturnValue(version);
     }
 
     it('get simple secret', async () => {
@@ -100,5 +150,25 @@ describe('integration', () => {
         expect(core.exportVariable).toBeCalledWith('SECRET', 'SUPERSECRET');
         expect(core.exportVariable).toBeCalledWith('NAMED_SECRET', 'SUPERSECRET');
         expect(core.exportVariable).toBeCalledWith('OTHERSECRET', 'OTHERSUPERSECRET');
+    });
+
+    it('get secret from K/V v1', async () => {
+        mockInput('test secret');
+        mockEngineName('my-secret');
+        mockVersion('1');
+
+        await exportSecrets();
+
+        expect(core.exportVariable).toBeCalledWith('SECRET', 'CUSTOMSECRET');
+    });
+
+    it('get nested secret from K/V v1', async () => {
+        mockInput('nested/test otherSecret');
+        mockEngineName('my-secret');
+        mockVersion('1');
+
+        await exportSecrets();
+
+        expect(core.exportVariable).toBeCalledWith('OTHERSECRET', 'OTHERCUSTOMSECRET');
     });
 });
