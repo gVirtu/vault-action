@@ -21,7 +21,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/RichiCoder1/vault-action.git"
+        "url": "git+https://github.com/gVirtu/vault-action.git"
     },
     "keywords": [
         "hashicorp",
