@@ -41,13 +41,19 @@ async function exportSecrets() {
         const requestPath = (kvVersion === 1)
                             ? `${vaultUrl}/v1/${engineName}/${secretPath}`
                             : `${vaultUrl}/v1/${engineName}/data/${secretPath}`;
-        const result = await got(requestPath, requestOptions);
 
-        const secretData = parseResponse(result.body, kvVersion);
-        const value = secretData[secretKey];
-        command.issue('add-mask', value);
-        core.exportVariable(outputName, `${value}`);
-        core.debug(`✔ ${secretPath} => ${outputName}`);
+        try {
+            const result = await got(requestPath, requestOptions);
+
+            const secretData = parseResponse(result.body, kvVersion);
+            const value = secretData[secretKey];
+            command.issue('add-mask', value);
+            core.exportVariable(outputName, `${value}`);
+            core.debug(`✔ ${secretPath} => ${outputName}`);
+        } catch (error) {
+            const {response} = error;
+            throw Error(`Error ${response.statusCode} on request ${requestPath}: ${response.body}`);
+        }
     }
 };
 
